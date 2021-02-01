@@ -61,7 +61,7 @@ DISABLE_VS_WARNINGS(4100)
 
 
 #include "misc_helpers.h"
-#include "static_initializer.h"
+#include "static_helpers.h"
 #include "string_tools.h"
 #include "time_helper.h"
 #include "misc_os_dependent.h"
@@ -670,7 +670,9 @@ namespace log_space
       boost::filesystem::create_directories(m_default_log_path_w, ec);
       boost::filesystem::ofstream* pstream = new boost::filesystem::ofstream;
       
-      std::wstring target_path = m_default_log_path_w + L"/" + epee::string_encoding::utf8_to_wstring(pstream_name);
+      std::wstring target_path = epee::string_encoding::utf8_to_wstring(pstream_name);
+      if (!m_default_log_path_w.empty())
+        target_path = m_default_log_path_w + L"/" + target_path;
       
       pstream->open( target_path.c_str(), std::ios_base::out | std::ios::app /*ios_base::trunc */);
       if(pstream->fail())
@@ -946,8 +948,8 @@ namespace log_space
   typedef std::map<std::string, uint64_t> channels_err_stat_container_type;
   inline epee::locked_object_proxy<channels_err_stat_container_type> get_channels_errors_stat_container()
   {
-    static std::recursive_mutex cs;
-    static channels_err_stat_container_type errors_by_channel;
+    static epee::static_helpers::wrapper<std::recursive_mutex> cs;
+    static epee::static_helpers::wrapper<channels_err_stat_container_type> errors_by_channel;
     epee::locked_object_proxy<channels_err_stat_container_type> res(errors_by_channel, cs);
     return res; 
   }
@@ -1194,7 +1196,7 @@ namespace log_space
   class log_singletone
   {
   public:
-    friend class initializer<log_singletone>;
+    friend class static_helpers::initializer<log_singletone>;
     friend class logger;
     static int get_log_detalisation_level()
     {
@@ -1205,7 +1207,7 @@ namespace log_space
     //get_enabled_channels not thread-safe, at the moment leave it like this because it's configured in main, before other threads started
     static std::set<std::string>& get_enabled_channels()
     {
-      static std::set<std::string> genabled_channels;
+      static epee::static_helpers::wrapper<std::set<std::string>> genabled_channels;
       return genabled_channels;
     }
 
@@ -1611,7 +1613,7 @@ POP_GCC_WARNINGS
     //static int get_set_error_filter(bool is_need_set = false)
   };
 
-  const static initializer<log_singletone> log_initializer;
+  const static static_helpers::initializer<log_singletone> log_initializer;
   /************************************************************************/
   /*                                                                      */
 //  /************************************************************************/

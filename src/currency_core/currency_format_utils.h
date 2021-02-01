@@ -27,6 +27,7 @@
 #include "blockchain_storage_basic.h"
 #include "currency_format_utils_blocks.h"
 #include "currency_format_utils_transactions.h"
+#include "core_runtime_config.h"
 
 
 // ------ get_tx_type_definition -------------
@@ -47,9 +48,6 @@
 
 
 
-
-
-
 namespace currency
 {
   bool operator ==(const currency::transaction& a, const currency::transaction& b);
@@ -57,9 +55,8 @@ namespace currency
   bool operator ==(const currency::extra_attachment_info& a, const currency::extra_attachment_info& b);
 
 
-
   typedef boost::multiprecision::uint128_t uint128_tl;
-  
+
 
   struct tx_extra_info 
   {
@@ -242,6 +239,7 @@ namespace currency
   bool check_inputs_types_supported(const transaction& tx);
   bool check_outs_valid(const transaction& tx);
   bool parse_amount(uint64_t& amount, const std::string& str_amount);
+  bool parse_tracking_seed(const std::string& tracking_seed, account_public_address& address, crypto::secret_key& view_sec_key, uint64_t& creation_timestamp);
 
 
 
@@ -293,8 +291,8 @@ namespace currency
   bool fill_tx_rpc_details(tx_rpc_extended_info& tei, const transaction& tx, const transaction_chain_entry* ptce, const crypto::hash& h, uint64_t timestamp, bool is_short = false);
   bool fill_block_rpc_details(block_rpc_extended_info& pei_rpc, const block_extended_info& bei_chain, const crypto::hash& h);
   void append_per_block_increments_for_tx(const transaction& tx, std::unordered_map<uint64_t, uint32_t>& gindices);
-  std::string get_word_from_timstamp(uint64_t timestamp);
-  uint64_t get_timstamp_from_word(std::string word);
+  std::string get_word_from_timstamp(uint64_t timestamp, bool use_password);
+  uint64_t get_timstamp_from_word(std::string word, bool& password_used);
 
   template<class t_txin_v>
   typename std::conditional<std::is_const<t_txin_v>::value, const std::vector<txin_etc_details_v>, std::vector<txin_etc_details_v> >::type& get_txin_etc_options(t_txin_v& in)
@@ -348,7 +346,7 @@ namespace currency
   bool is_out_to_acc(const account_keys& acc, const tx_out_t& out_key, const crypto::public_key& tx_pub_key, size_t output_index)
   {
     crypto::key_derivation derivation;
-    generate_key_derivation(tx_pub_key, acc.m_view_secret_key, derivation);
+    generate_key_derivation(tx_pub_key, acc.view_secret_key, derivation);
     return is_out_to_acc(acc, out_key, derivation, output_index);
   }
   //----------------------------------------------------------------------------------------------------
@@ -435,8 +433,7 @@ namespace currency
     ai.m_alias = ard.alias;
     return true;
   }
-
-
+  //---------------------------------------------------------------
   template<class extra_t>
   extra_t& get_or_add_field_to_extra(std::vector<extra_v>& extra)
   {
@@ -448,6 +445,7 @@ namespace currency
     extra.push_back(extra_t());
     return boost::get<extra_t>(extra.back());
   }
+  //---------------------------------------------------------------
   template<class variant_t, class variant_type_t>
   void update_or_add_field_to_extra(std::vector<variant_t>& variant_container, const variant_type_t& v)
   {
@@ -461,7 +459,22 @@ namespace currency
     }
     variant_container.push_back(v);
   }
-
+  //---------------------------------------------------------------
+  template<class variant_type_t, class variant_t>
+  void remove_field_of_type_from_extra(std::vector<variant_t>& variant_container)
+  {
+    for (size_t i = 0; i != variant_container.size();)
+    {
+      if (variant_container[i].type() == typeid(variant_type_t))
+      {
+        variant_container.erase(variant_container.begin()+i);
+      }
+      else
+      {
+        i++;
+      }
+    }
+  }
   //---------------------------------------------------------------
   template<typename t_container>
   bool get_payment_id_from_tx(const t_container& att, std::string& payment_id)
@@ -593,6 +606,51 @@ namespace currency
     return boost::apply_visitor(input_amount_getter(), v);
   }
   //---------------------------------------------------------------
+  template <typename container_t>
+  void create_and_add_tx_payer_to_container_from_address(container_t& container, const account_public_address& addr, uint64_t top_block_height, const core_runtime_config& crc)
+  {
+    if (top_block_height > crc.hard_fork_02_starts_after_height)
+    {
+      // after hardfork 2
+      tx_payer result = AUTO_VAL_INIT(result);
+      result.acc_addr = addr;
+      container.push_back(result);
+    }
+    else
+    {
+      // before hardfork 2 -- add only if addr is not auditable
+      if (!addr.is_auditable())
+      {
+        tx_payer_old result = AUTO_VAL_INIT(result);
+        result.acc_addr = addr.to_old();
+        container.push_back(result);
+      }
+    }
+  }
+  //---------------------------------------------------------------
+  template <typename container_t>
+  void create_and_add_tx_receiver_to_container_from_address(container_t& container, const account_public_address& addr, uint64_t top_block_height, const core_runtime_config& crc)
+  {
+    if (top_block_height > crc.hard_fork_02_starts_after_height)
+    {
+      // after hardfork 2
+      tx_receiver result = AUTO_VAL_INIT(result);
+      result.acc_addr = addr;
+      container.push_back(result);
+    }
+    else
+    {
+      // before hardfork 2 -- add only if addr is not auditable
+      if (!addr.is_auditable())
+      {
+        tx_receiver_old result = AUTO_VAL_INIT(result);
+        result.acc_addr = addr.to_old();
+        container.push_back(result);
+      }
+    }
+  }
+  //---------------------------------------------------------------
+  //---------------------------------------------------------------
   std::ostream& operator <<(std::ostream& o, const ref_by_id& r);
   //---------------------------------------------------------------
 #ifndef ANDROID_BUILD
@@ -615,6 +673,3 @@ namespace currency
 
 
 } // namespace currency
-
-
-

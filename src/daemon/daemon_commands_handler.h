@@ -16,6 +16,7 @@
 #include "warnings.h"
 #include "currency_core/bc_offers_service.h"
 #include "serialization/binary_utils.h"
+#include "simplewallet/password_container.h"
 
 PUSH_VS_WARNINGS
 DISABLE_VS_WARNINGS(4100)
@@ -38,7 +39,7 @@ public:
     //m_cmd_binder.set_handler("print_bci", boost::bind(&daemon_commands_handler::print_bci, this, _1));
     m_cmd_binder.set_handler("print_bc_outs", boost::bind(&daemon_commands_handler::print_bc_outs, this, _1));
     m_cmd_binder.set_handler("print_market", boost::bind(&daemon_commands_handler::print_market, this, _1));
-    m_cmd_binder.set_handler("print_bc_outs_stat", boost::bind(&daemon_commands_handler::print_bc_outs_stat, this, _1));
+    m_cmd_binder.set_handler("print_bc_outs_stats", boost::bind(&daemon_commands_handler::print_bc_outs_stats, this, _1));
     m_cmd_binder.set_handler("print_block", boost::bind(&daemon_commands_handler::print_block, this, _1), "Print block, print_block <block_hash> | <block_height>");
     m_cmd_binder.set_handler("print_block_info", boost::bind(&daemon_commands_handler::print_block_info, this, _1), "Print block info, print_block <block_hash> | <block_height>");
     m_cmd_binder.set_handler("print_tx", boost::bind(&daemon_commands_handler::print_tx, this, _1), "Print transaction, print_tx <transaction_hash>");
@@ -69,7 +70,7 @@ public:
     m_cmd_binder.set_handler("print_tx_from_hex_blob", boost::bind(&daemon_commands_handler::print_tx_from_hex_blob, this, _1), "Unserialize transaction from hex binary data to json-like representation");
     m_cmd_binder.set_handler("print_tx_outputs_usage", boost::bind(&daemon_commands_handler::print_tx_outputs_usage, this, _1), "Analyse if tx outputs for involved in subsequent transactions");
     m_cmd_binder.set_handler("print_difficulties_of_last_n_blocks", boost::bind(&daemon_commands_handler::print_difficulties_of_last_n_blocks, this, _1), "Print difficulties of last n blocks");
-
+    m_cmd_binder.set_handler("debug_remote_node_mode", boost::bind(&daemon_commands_handler::debug_remote_node_mode, this, _1), "<ip-address> - If node got connected put node into 'debug mode' i.e. no sync process of other communication except ping responses, maintenance secrete key will be requested"); 
 #ifdef _DEBUG
     m_cmd_binder.set_handler("debug_set_time_adj", boost::bind(&daemon_commands_handler::debug_set_time_adj, this, _1), "DEBUG: set core time adjustment");
 #endif
@@ -217,9 +218,9 @@ private:
     return true;
   }
   //--------------------------------------------------------------------------------
-  bool print_bc_outs_stat(const std::vector<std::string>& args)
+  bool print_bc_outs_stats(const std::vector<std::string>& args)
   {
-    m_srv.get_payload_object().get_core().get_blockchain_storage().print_blockchain_outs_stat();
+    m_srv.get_payload_object().get_core().get_blockchain_storage().print_blockchain_outs_stats();
     return true;
   }
   //--------------------------------------------------------------------------------
@@ -316,21 +317,24 @@ private:
       std::cout << "specified key_image parameter '" << args[0] << "' is wrong" << ENDL;
       return false;
     }
+
+    currency::blockchain_storage& bcs = m_srv.get_payload_object().get_core().get_blockchain_storage();
+
     std::list<std::string> res_list;
     crypto::hash tx_id = currency::null_hash;
-    auto tx_chain_entry = m_srv.get_payload_object().get_core().get_blockchain_storage().find_key_image_and_related_tx(ki, tx_id);
+    auto tx_chain_entry = bcs.find_key_image_and_related_tx(ki, tx_id);
 
     if (tx_chain_entry)
     {
-      LOG_PRINT_L0("Found tx: " << ENDL << obj_to_json_str(tx_chain_entry->tx) << ENDL << "height: " << tx_chain_entry->m_keeper_block_height);
-    }
-    if (tx_id == currency::null_hash)
-    {
-      LOG_PRINT_L0("Not found any related tx.");
+      currency::block_extended_info bei = AUTO_VAL_INIT(bei);
+      CHECK_AND_ASSERT_MES(bcs.get_block_extended_info_by_height(tx_chain_entry->m_keeper_block_height, bei), false, "cannot find block by height " << tx_chain_entry->m_keeper_block_height);
+
+      LOG_PRINT_L0("Key image found in tx: " << tx_id << " height " << tx_chain_entry->m_keeper_block_height << " (ts: " << epee::misc_utils::get_time_str_v2(currency::get_actual_timestamp(bei.bl)) << ")" << ENDL
+        << obj_to_json_str(tx_chain_entry->tx));
     }
     else
     {
-      LOG_PRINT_L0("TxID: " << tx_id);
+      LOG_PRINT_L0("Not found any related tx.");
     }
     return true;
   }
@@ -731,6 +735,24 @@ private:
     }
 
     m_srv.get_payload_object().get_core().get_blockchain_storage().print_last_n_difficulty_numbers(n);
+    return true;
+  }
+  //--------------------------------------------------------------------------------
+  bool debug_remote_node_mode(const std::vector<std::string>& args)
+  {
+    if (args.empty())
+    {
+      std::cout << "expected: ip address" << std::endl;
+      return true;
+    }
+    uint32_t ip = AUTO_VAL_INIT(ip);
+    if (!string_tools::get_ip_int32_from_string(ip, args.front()))
+    {
+      std::cout << "expected: ip address" << std::endl;
+      return true;
+    }
+    m_srv.get_payload_object().set_to_debug_mode(ip);
+
     return true;
   }
   //--------------------------------------------------------------------------------

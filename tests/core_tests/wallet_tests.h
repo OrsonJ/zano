@@ -259,3 +259,20 @@ struct packing_outputs_on_pos_minting_wallet : public wallet_test
   bool set_core_config(currency::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
   bool c1(currency::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
 };
+
+struct wallet_sending_to_integrated_address : public wallet_test
+{
+  wallet_sending_to_integrated_address();
+  bool generate(std::vector<test_event_entry>& events) const;
+  bool c1(currency::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+};
+
+struct wallet_watch_only_and_chain_switch : public wallet_test
+{
+  wallet_watch_only_and_chain_switch();
+  bool generate(std::vector<test_event_entry>& events) const;
+  bool c1(currency::core& c, size_t ev_index, const std::vector<test_event_entry>& events);
+
+  mutable crypto::hash m_split_point_block_id;
+  mutable uint64_t m_split_point_block_height;
+};

@@ -38,16 +38,23 @@ namespace tools
   {
     currency::COMMAND_RPC_GET_BLOCKS_FAST::request req;
     req.block_ids = rqt.block_ids;
+    req.minimum_height = rqt.minimum_height;
+    req.need_global_indexes = rqt.need_global_indexes;
     currency::COMMAND_RPC_GET_BLOCKS_FAST::response res = AUTO_VAL_INIT(res);
     bool r = call_COMMAND_RPC_GET_BLOCKS_FAST(req, res);
     rsp.status = res.status;
-    if (rsp.status == CORE_RPC_STATUS_OK)
+    if (rsp.status == API_RETURN_CODE_OK)
     {
       rsp.current_height = res.current_height;
       rsp.start_height = res.start_height;
       r = unserialize_block_complete_entry(res, rsp);
     }
     return r;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool default_http_core_proxy::call_COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE(const currency::COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE::request& rqt, currency::COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE::response& rsp)
+  {
+    return invoke_http_json_rpc_update_is_disconnect("get_est_height_from_date", rqt, rsp);
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool default_http_core_proxy::call_COMMAND_RPC_GET_INFO(const currency::COMMAND_RPC_GET_INFO::request& req, currency::COMMAND_RPC_GET_INFO::response& res)
@@ -139,8 +146,8 @@ namespace tools
     bool r = m_http_client.connect(u.host, std::to_string(u.port), m_connection_timeout);
     if (r)
     {
-      *m_plast_daemon_is_disconnected = false;
-      m_last_success_interract_time = time(nullptr);
+      m_pdiganostic_info->last_daemon_is_disconnected = false;
+      m_pdiganostic_info->last_success_interract_time = time(nullptr);
     }
     return r;
   }
@@ -171,11 +178,11 @@ namespace tools
     return tools::get_transfer_address(adr_str, addr, payment_id, this);
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  void default_http_core_proxy::set_plast_daemon_is_disconnected(std::atomic<bool> *plast_daemon_is_disconnected)
-  {
-    CRITICAL_REGION_LOCAL(m_lock);
-    m_plast_daemon_is_disconnected = plast_daemon_is_disconnected ? plast_daemon_is_disconnected : &m_last_daemon_is_disconnected_stub;
-  }
+//   void default_http_core_proxy::set_plast_daemon_is_disconnected(std::atomic<bool> *plast_daemon_is_disconnected)
+//   {
+//     CRITICAL_REGION_LOCAL(m_lock);
+//     m_plast_daemon_is_disconnected = plast_daemon_is_disconnected ? plast_daemon_is_disconnected : &m_last_daemon_is_disconnected_stub;
+//   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool default_http_core_proxy::set_connectivity(unsigned int connection_timeout, size_t repeats_count)
   {
@@ -184,8 +191,8 @@ namespace tools
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  default_http_core_proxy::default_http_core_proxy() :m_plast_daemon_is_disconnected(&m_last_daemon_is_disconnected_stub),
-    m_last_success_interract_time(0),
+  default_http_core_proxy::default_http_core_proxy(): //:m_plast_daemon_is_disconnected(&m_last_daemon_is_disconnected_stub),
+    //m_last_success_interract_time(0),
     m_connection_timeout(WALLET_RCP_CONNECTION_TIMEOUT),
     m_attempts_count(WALLET_RCP_COUNT_ATTEMNTS)
   {

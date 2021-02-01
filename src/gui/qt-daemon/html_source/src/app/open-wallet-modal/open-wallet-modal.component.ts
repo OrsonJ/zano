@@ -35,18 +35,6 @@ export class OpenWalletModalComponent implements OnInit {
     if (this.wallets.length) {
       this.wallet = this.wallets[0];
       this.wallet.pass = '';
-
-      this.backend.openWallet(this.wallet.path, '', this.variablesService.count, true, (status, data, error) => {
-        if (error === 'FILE_NOT_FOUND') {
-          this.wallet.notFound = true;
-        }
-        if (status) {
-          this.wallet.pass = '';
-          this.wallet.emptyPass = true;
-          this.backend.closeWallet(data.wallet_id);
-          this.openWallet();
-        }
-      });
     }
   }
 
@@ -56,6 +44,9 @@ export class OpenWalletModalComponent implements OnInit {
     }
     this.backend.openWallet(this.wallet.path, this.wallet.pass, this.variablesService.count, false, (open_status, open_data, open_error) => {
       if (open_error && open_error === 'FILE_NOT_FOUND') {
+        this.ngZone.run(() => {
+          this.wallet.notFound = true;
+        });
         let error_translate = this.translate.instant('OPEN_WALLET.FILE_NOT_FOUND1');
         error_translate += ':<br>' + this.wallet.path;
         error_translate += this.translate.instant('OPEN_WALLET.FILE_NOT_FOUND2');
@@ -86,6 +77,10 @@ export class OpenWalletModalComponent implements OnInit {
               open_data['wi'].tracking_hey
             );
             new_wallet.alias = this.backend.getWalletAlias(new_wallet.address);
+            new_wallet.is_auditable = open_data['wi'].is_auditable;
+            new_wallet.is_watch_only = open_data['wi'].is_watch_only;
+            new_wallet.currentPage = 1;
+            new_wallet.exclude_mining_txs = false;
             if (open_data.recent_history && open_data.recent_history.history) {
               new_wallet.total_history_item = open_data.recent_history.total_history_items;
               new_wallet.totalPages = Math.ceil( open_data.recent_history.total_history_items / this.variablesService.count);
@@ -121,10 +116,12 @@ export class OpenWalletModalComponent implements OnInit {
   }
 
   skipWallet() {
-    if (this.wallets.length) {
-      this.wallets.splice(0, 1);
-      this.ngOnInit();
-    }
+    this.ngZone.run(() => {
+      if (this.wallets.length) {
+        this.wallets.splice(0, 1);
+        this.ngOnInit();
+      }
+    });
   }
 
 }

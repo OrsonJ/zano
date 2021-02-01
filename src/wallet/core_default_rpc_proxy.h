@@ -11,7 +11,11 @@
 #include "core_rpc_proxy.h"
 #include "storages/http_abstract_invoke.h"
 
-#define WALLET_RCP_CONNECTION_TIMEOUT                          3000
+#ifdef NDEBUG
+#define WALLET_RCP_CONNECTION_TIMEOUT                          5000
+#else 
+#define WALLET_RCP_CONNECTION_TIMEOUT                          100000
+#endif
 #define WALLET_RCP_COUNT_ATTEMNTS                              3
 
 
@@ -28,6 +32,7 @@ namespace tools
     bool call_COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES(const currency::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::request& rqt, currency::COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES::response& rsp) override;
     bool call_COMMAND_RPC_GET_BLOCKS_FAST(const currency::COMMAND_RPC_GET_BLOCKS_FAST::request& rqt, currency::COMMAND_RPC_GET_BLOCKS_FAST::response& rsp) override;
     bool call_COMMAND_RPC_GET_BLOCKS_DIRECT(const currency::COMMAND_RPC_GET_BLOCKS_DIRECT::request& rqt, currency::COMMAND_RPC_GET_BLOCKS_DIRECT::response& rsp) override;
+    bool call_COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE(const currency::COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE::request& rqt, currency::COMMAND_RPC_GET_EST_HEIGHT_FROM_DATE::response& rsp) override;
     bool call_COMMAND_RPC_GET_INFO(const currency::COMMAND_RPC_GET_INFO::request& rqt, currency::COMMAND_RPC_GET_INFO::response& rsp) override;
     bool call_COMMAND_RPC_GET_TX_POOL(const currency::COMMAND_RPC_GET_TX_POOL::request& rqt, currency::COMMAND_RPC_GET_TX_POOL::response& rsp) override;
     bool call_COMMAND_RPC_GET_ALIASES_BY_ADDRESS(const currency::COMMAND_RPC_GET_ALIASES_BY_ADDRESS::request& rqt, currency::COMMAND_RPC_GET_ALIASES_BY_ADDRESS::response& rsp) override;
@@ -68,11 +73,11 @@ namespace tools
 
       if (ret)
       {
-        m_last_success_interract_time = time(nullptr);
-        *m_plast_daemon_is_disconnected = false;
+        m_pdiganostic_info->last_success_interract_time = time(nullptr);
+        m_pdiganostic_info->last_daemon_is_disconnected = false;
       }
       else
-        *m_plast_daemon_is_disconnected = true;
+        m_pdiganostic_info->last_daemon_is_disconnected = true;
       return ret;
     }
 
@@ -123,15 +128,13 @@ namespace tools
     //------------------------------------------------------------------------------------------------------------------------------
     virtual time_t get_last_success_interract_time() override
     {
-      return m_last_success_interract_time;
+      return m_pdiganostic_info->last_success_interract_time;
     }
 
     epee::critical_section m_lock;
     epee::net_utils::http::http_simple_client m_http_client;
     std::string m_daemon_address;
-    std::atomic<time_t> m_last_success_interract_time;
-    std::atomic<bool> *m_plast_daemon_is_disconnected;
-    std::atomic<bool> m_last_daemon_is_disconnected_stub;
+
     unsigned int m_connection_timeout;
     size_t m_attempts_count;
 

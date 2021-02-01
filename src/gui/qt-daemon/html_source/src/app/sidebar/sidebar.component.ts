@@ -3,6 +3,8 @@ import {ActivatedRoute, NavigationStart, Router} from '@angular/router';
 import {VariablesService} from '../_helpers/services/variables.service';
 import {BackendService} from '../_helpers/services/backend.service';
 import { ModalService } from '../_helpers/services/modal.service';
+import {AUDITABLE_WALLET_HELP_PAGE} from '../_shared/constants';
+import {DOWNLOADS_PAGE_URL} from '../_shared/constants';
 
 import icons from '../../assets/icons/icons.json';
 
@@ -22,6 +24,8 @@ export class SidebarComponent implements OnInit, OnDestroy {
 
   isModalDialogVisible = false;
   closeWalletId: number;
+
+  menuItemHovered: boolean;
 
   constructor(
     private route: ActivatedRoute,
@@ -59,6 +63,19 @@ export class SidebarComponent implements OnInit, OnDestroy {
       }
     });
   }
+
+  goMainPage() {
+    if (this.route.snapshot.queryParams && this.route.snapshot.queryParams.prevUrl === 'login') {
+      this.ngZone.run(() => {
+        this.router.navigate(['/'], {queryParams: {prevUrl: 'login'}});
+      });
+    } else {
+      this.ngZone.run(() => {
+        this.router.navigate(['/']);
+      });
+    }
+
+  };
 
   contactsRoute() {
     if (this.variablesService.appPass) {
@@ -105,7 +122,11 @@ export class SidebarComponent implements OnInit, OnDestroy {
   }
 
   getUpdate() {
-    this.backend.openUrlInBrowser('zano.org/downloads.html');
+    this.backend.openUrlInBrowser(DOWNLOADS_PAGE_URL);
+  }
+  goToAuditableWalletHelpPage(e) {
+    e.preventDefault();
+    this.backend.openUrlInBrowser(AUDITABLE_WALLET_HELP_PAGE);
   }
 
   logOut() {

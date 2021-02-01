@@ -168,6 +168,29 @@ namespace wallet_public
   };
 
 
+  struct seed_info_param
+  {
+    std::string seed_phrase;
+    std::string seed_password;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(seed_phrase)
+      KV_SERIALIZE(seed_password)
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct seed_phrase_info
+  {
+    bool syntax_correct;
+    bool require_password;
+    bool hash_sum_matched;
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(syntax_correct)
+      KV_SERIALIZE(require_password)
+      KV_SERIALIZE(hash_sum_matched)
+    END_KV_SERIALIZE_MAP()
+  };
 
   struct COMMAND_RPC_GET_BALANCE
   {
@@ -221,7 +244,6 @@ namespace wallet_public
     {
       std::string               address;
       std::string               path;
-      std::string               seed;
       uint64_t                  transfers_count;
       uint64_t                  transfer_entries_count;
       bool                      is_whatch_only;
@@ -230,7 +252,6 @@ namespace wallet_public
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
         KV_SERIALIZE(path)
-        KV_SERIALIZE(seed)
         KV_SERIALIZE(transfers_count)
         KV_SERIALIZE(transfer_entries_count)
         KV_SERIALIZE(is_whatch_only)
@@ -239,6 +260,32 @@ namespace wallet_public
     };
   };
 
+  struct COMMAND_RPC_GET_WALLET_RESTORE_INFO
+  {
+    struct request
+    {
+      std::string               seed_password;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(seed_password)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct response
+    {
+      std::string               seed_phrase;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(seed_phrase)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  struct COMMAND_RPC_GET_SEED_PHRASE_INFO
+  {
+    typedef seed_info_param request;
+    typedef seed_phrase_info response;
+  };
 
   struct wallet_provision_info
   {
@@ -275,11 +322,13 @@ namespace wallet_public
       of GET_RECENT_TXS_AND_INFO with offsets)
       */
       bool update_provision_info;  
+      bool exclude_mining_txs;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(offset)
         KV_SERIALIZE(count)
         KV_SERIALIZE(update_provision_info)
+        KV_SERIALIZE(exclude_mining_txs)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -288,11 +337,13 @@ namespace wallet_public
       wallet_provision_info pi;
       std::vector<wallet_transfer_info> transfers;
       uint64_t total_transfers;
+      uint64_t last_item_index;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(pi)
         KV_SERIALIZE(transfers)
         KV_SERIALIZE(total_transfers)
+        KV_SERIALIZE(last_item_index)
       END_KV_SERIALIZE_MAP()
     };
   };
@@ -300,7 +351,7 @@ namespace wallet_public
 
 
   
-  struct trnsfer_destination
+  struct transfer_destination
   {
     uint64_t amount;
     std::string address;
@@ -314,12 +365,14 @@ namespace wallet_public
   {
     struct request
     {
-      std::list<trnsfer_destination> destinations;
+      std::list<transfer_destination> destinations;
       uint64_t fee;
       uint64_t mixin;
       //uint64_t unlock_time;
       std::string payment_id; // hex-encoded
       std::string comment; 
+      bool push_payer;
+      bool hide_receiver;
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(destinations)
@@ -328,6 +381,8 @@ namespace wallet_public
         //KV_SERIALIZE(unlock_time)
         KV_SERIALIZE(payment_id)
         KV_SERIALIZE(comment)
+        KV_SERIALIZE(push_payer)
+        KV_SERIALIZE(hide_receiver)
       END_KV_SERIALIZE_MAP()
     };
 
@@ -355,7 +410,10 @@ namespace wallet_public
 
     struct response
     {
+      uint64_t wallet_file_size;
+
       BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(wallet_file_size)
       END_KV_SERIALIZE_MAP()
     };
   };

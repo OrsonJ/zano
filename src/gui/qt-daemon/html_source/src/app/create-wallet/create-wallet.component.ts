@@ -40,7 +40,7 @@ export class CreateWalletComponent implements OnInit {
   constructor(
     private router: Router,
     private backend: BackendService,
-    private variablesService: VariablesService,
+    public variablesService: VariablesService,
     private modalService: ModalService,
     private ngZone: NgZone,
     private translate: TranslateService
@@ -84,7 +84,7 @@ export class CreateWalletComponent implements OnInit {
               this.variablesService.opening_wallet.currentPage = 1;
               this.ngZone.run(() => {
                 this.walletSaved = true;
-                this.progressWidth = '50%';
+                this.progressWidth = '33%';
               });
             } else {
               if (errorCode && errorCode === 'ALREADY_EXISTS') {

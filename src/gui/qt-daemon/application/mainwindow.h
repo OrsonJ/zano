@@ -91,6 +91,7 @@ public:
 
   QString get_version();
   QString get_os_version();
+  QString get_network_type();
   QString transfer(const QString& json_transfer_object);
   QString have_secure_app_data();
   QString drop_secure_app_data();
@@ -136,6 +137,7 @@ public:
   QString is_autostart_enabled();
   QString toggle_autostart(const QString& param);
   QString is_valid_restore_wallet_text(const QString& param);
+  QString get_seed_phrase_info(const QString& param);
   QString print_text(const QString& param);
   QString print_log(const QString& param);
   QString set_clipboard(const QString& param);
@@ -157,6 +159,9 @@ public:
   void    on_menu_show();
   QString is_remnotenode_mode_preconfigured();
   QString start_backend(const QString& params);
+
+  //for test purposes onlys
+  QString request_dummy();
 
 signals:
   void quit_requested(const QString str);
@@ -212,6 +217,7 @@ private:
   void restore_pos(bool consider_showed = false);
   bool store_app_config();
   bool load_app_config();
+  bool init_window();
 
   std::string get_wallet_log_prefix(size_t wallet_id) const { return m_backend.get_wallet_log_prefix(wallet_id); }
 

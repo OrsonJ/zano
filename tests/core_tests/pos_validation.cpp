@@ -254,7 +254,7 @@ bool gen_pos_extra_nonce::generate(std::vector<test_event_entry>& events) const
   currency::blobdata extra_none(255, 'x');
   currency::extra_alias_entry alias = AUTO_VAL_INIT(alias);
   alias.m_alias = std::string(255, 'a');
-  alias.m_address = miner.get_keys().m_account_address;
+  alias.m_address = miner.get_keys().account_address;
   alias.m_text_comment = std::string(255, 'y');
   pb.step4_generate_coinbase_tx(generator.get_timestamps_median(prev_id), generator.get_already_generated_coins(blk_0r), alice.get_public_address(), extra_none, CURRENCY_MINER_TX_MAX_OUTS, alias);
   pb.step5_sign(stake_tx_pub_key, stake_output_idx, stake_output_pubkey, miner);
@@ -923,7 +923,7 @@ bool pos_altblocks_validation::generate(std::vector<test_event_entry>& events) c
   //          +-----------------------+
   //          |                      tx_0                                tx_0 spends all outputs in blk_1 (main chain)
   // (0 )-   (1 )-...(1r)-   (2 )-   (3 )-...(3r)-   (4 )-   (5 )-       <- main chain
-  //           |        \
+  //           |        \ 
   //           |         \-  (2a)-                                       <- alt chain
   //           +--------------+                                          PoS block 2a uses stake already spent in main chain
 
@@ -941,7 +941,7 @@ bool pos_altblocks_validation::generate(std::vector<test_event_entry>& events) c
   //          +-----------------------+
   //          |                      tx_0                                tx_0 spends all outputs in blk_1 (main chain)
   // (0 )-   (1 )-...(1r)-   (2 )-   (3 )-...(3r)-   (4 )-   (5 )-       <- main chain
-  //          ||        \
+  //          ||        \ 
   //          ||         \-  (2a)-   #3a#-                               <- alt chain
   //          |+--------------+       |                                  PoS block 2a uses stake already spent in main chain (okay)
   //          +-----------------------+                                  PoS block 3a uses stake already spent in current alt chain (fail)
@@ -962,11 +962,11 @@ bool pos_altblocks_validation::generate(std::vector<test_event_entry>& events) c
   //          +-----------------------+
   //          |                      tx_0                                        tx_0 spends all outputs in blk_1 (main chain)
   // (0 )-   (1 )-...(1r)-   (2 )-   (3 )- ........  (3r)-   (4 )-   (5 )-       <- main chain
-  //          ||        \
+  //          ||        \ 
   //          ||         \-  (2a)-   #3a#-                                       <- alt chain
   //          |+--------------+ \     |                                          PoS block 2a uses stake already spent in main chain (okay)
   //          +---------------|-------+                                          PoS block 3a uses stake already spent in current alt chain (fail)
-  //                          |   \
+  //                          |   \ 
   //                          |    \ ...... (2br)-   (3b)-                       <- alt chain
   //                          |                       |
   //                          +-----------------------+                          PoS block 3b uses as stake an output, created in current alt chain (2a)
@@ -989,7 +989,7 @@ bool pos_altblocks_validation::generate(std::vector<test_event_entry>& events) c
   //          ||         \-  (2a)-   #3a#-                 |                     <- alt chain
   //          |+--------------+ \     |                    \                     PoS block 2a uses stake already spent in main chain (okay)
   //          +---------------|-------+                     \                    PoS block 3a uses stake already spent in current alt chain (fail)
-  //                          |   \                          \
+  //                          |   \                          \ 
   //                          |    \ ...... (2br)-   (3b)-   #4b#                <- alt chain
   //                          |                       |
   //                          +-----------------------+                          PoS block 3b uses as stake an output, created in current alt chain (2a)

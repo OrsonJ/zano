@@ -1,20 +1,22 @@
 <div class="header">
   <div>
     <h3 tooltip="{{ variablesService.currentWallet.name }}" placement="bottom-left" tooltipClass="table-tooltip" [delay]="500" [showWhenNoOverflow]="false">{{variablesService.currentWallet.name}}</h3>
-    <button [routerLink]="['/assign-alias']" *ngIf="!variablesService.currentWallet.alias.hasOwnProperty('name') && variablesService.currentWallet.loaded && variablesService.daemon_state === 2 && variablesService.currentWallet.alias_available">
-      <i class="icon account"></i>
-      <span>{{ 'WALLET.REGISTER_ALIAS' | translate }}</span>
-    </button>
-    <div class="alias" *ngIf="variablesService.currentWallet.alias.hasOwnProperty('name') && variablesService.currentWallet.loaded && variablesService.daemon_state === 2">
-      <span>{{variablesService.currentWallet.alias['name']}}</span>
-      <ng-container *ngIf="variablesService.currentWallet.alias_available">
-        <i class="icon edit" [routerLink]="['/edit-alias']" tooltip="{{ 'WALLET.TOOLTIPS.EDIT_ALIAS' | translate }}" placement="bottom-right" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500"></i>
-        <i class="icon transfer" [routerLink]="['/transfer-alias']" tooltip="{{ 'WALLET.TOOLTIPS.TRANSFER_ALIAS' | translate }}" placement="right" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500"></i>
-      </ng-container>
+    <div *ngIf="!variablesService.currentWallet.is_auditable">
+      <button [routerLink]="['/assign-alias']" *ngIf="!variablesService.currentWallet.alias.hasOwnProperty('name') && variablesService.currentWallet.loaded && variablesService.daemon_state === 2 && variablesService.currentWallet.alias_available">
+        <i class="icon account"></i>
+        <span>{{ 'WALLET.REGISTER_ALIAS' | translate }}</span>
+      </button>
+      <div class="alias" *ngIf="variablesService.currentWallet.alias.hasOwnProperty('name') && variablesService.currentWallet.loaded && variablesService.daemon_state === 2">
+        <span>{{variablesService.currentWallet.alias['name']}}</span>
+        <ng-container *ngIf="variablesService.currentWallet.alias_available">
+          <i class="icon edit" [routerLink]="['/edit-alias']" tooltip="{{ 'WALLET.TOOLTIPS.EDIT_ALIAS' | translate }}" placement="bottom-right" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500"></i>
+          <i class="icon transfer" [routerLink]="['/transfer-alias']" tooltip="{{ 'WALLET.TOOLTIPS.TRANSFER_ALIAS' | translate }}" placement="right" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500"></i>
+        </ng-container>
+      </div>
     </div>
   </div>
   <div>
-    <button [routerLink]="['/details']" routerLinkActive="active" tooltip="{{ 'WALLET.TOOLTIPS.SETTINGS' | translate }}" placement="left" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500">
+    <button [routerLink]="['/details']" routerLinkActive="active" tooltip="{{ 'WALLET.TOOLTIPS.SETTINGS' | translate }}" placement="left" tooltipClass="table-tooltip account-tooltip" [delay]="500" [timeDelay]="500" [disabled]="variablesService.daemon_state !== 2 || !walletLoaded">
       <i class="icon details"></i>
     </button>
   </div>
@@ -30,7 +32,10 @@
 <div class="tabs">
   <div class="tabs-header">
     <ng-container *ngFor="let tab of tabs; let index = index">
-      <div class="tab" [class.active]="tab.active" [class.disabled]="(tab.link === '/send' || tab.link === '/contracts' || tab.link === '/staking') && (variablesService.daemon_state !== 2 || !variablesService.currentWallet.loaded)" (click)="changeTab(index)" (mouseover)="itemHovered(index, true)" (mouseleave)="itemHovered(index, false)">
+      <div class="tab" [class.active]="tab.active" [ngClass]="{ 'hide': ((tab.link === '/send' || tab.link === '/contracts') && variablesService.currentWallet.is_watch_only && variablesService.currentWallet.is_auditable) }"
+           [class.disabled]="((tab.link === '/send' || tab.link === '/contracts' || tab.link === '/staking') && (variablesService.daemon_state !== 2 || !variablesService.currentWallet.loaded))
+                || ((tab.link === '/send' || tab.link === '/contracts') && variablesService.currentWallet.is_watch_only && variablesService.currentWallet.is_auditable)"
+           (click)="changeTab(index)" (mouseover)="itemHovered(index, true)" (mouseleave)="itemHovered(index, false)">
         <i class="icon" [ngClass]="tab.icon"  *ngIf="!tab.itemHovered; else svgAnimated"></i>
         <ng-template #svgAnimated>
           <div class="animated" [innerHTML]="tab.animated | safeHTML"></div>
@@ -45,12 +50,45 @@
   </div>
   <div *ngIf="activeTab === 'history'" class="pagination-wrapper">
     <div class="pagination">
-        <button [disabled]="variablesService.currentWallet.currentPage === 1" (click)="setPage(variablesService.currentWallet.currentPage - 1)"><</button>
-        <ng-container *ngFor="let page of variablesService.currentWallet.pages">
-          <button [ngClass]="{ 'active': variablesService.currentWallet.currentPage === page }" 
-          (click)="setPage(page)">{{page}}</button>
+      <div>
+        <button
+          [ngClass]="{'disabled': sync_started || wallet}"
+          [disabled]="variablesService.currentWallet.currentPage === 1 || sync_started || wallet"
+          (click)="setPage(variablesService.currentWallet.currentPage - 1)">
+          <
+        </button>
+
+        <ng-container *ngIf="!mining">
+          <button [disabled]="sync_started || wallet"
+                  *ngFor="let page of variablesService.currentWallet.pages"
+                  [ngClass]="{ 'active': variablesService.currentWallet.currentPage === page,'disabled': sync_started || wallet }"
+                  (click)="setPage(page)">{{page}}</button>
         </ng-container>
-        <button [disabled]="variablesService.currentWallet.currentPage === variablesService.currentWallet.totalPages" (click)="setPage(variablesService.currentWallet.currentPage + 1)">></button>
+
+        <ng-container *ngIf="mining">
+          <button [ngClass]="{ 'active': variablesService.currentWallet.currentPage, 'disabled': sync_started || wallet}"
+                  [disabled]="stop_paginate || sync_started || wallet"
+                  (click)="setPage(variablesService.currentWallet.currentPage)">
+            {{variablesService.currentWallet.currentPage}}
+          </button>
+        </ng-container>
+
+        <button
+          [disabled]="stop_paginate || sync_started || wallet"
+          [ngClass]="{'disabled': sync_started || wallet}"
+          (click)="setPage(variablesService.currentWallet.currentPage + 1)">
+          >
+        </button>
+
+      </div>
+      <div class="mining-transaction-switch">
+        <span class="switch-text">Hide mining transactions</span>
+        <div class="switch" [ngClass]="{'disabled': sync_started || wallet}" (click)="toggleMiningTransactions(); $event.stopPropagation()">
+          <span class="option" *ngIf="mining">{{ 'STAKING.SWITCH.ON' | translate }}</span>
+          <span class="circle" [class.on]="mining" [class.off]="!mining"></span>
+          <span class="option" *ngIf="!mining">{{ 'STAKING.SWITCH.OFF' | translate }}</span>
+        </div>
+      </div>
     </div>
   </div>
 </div>

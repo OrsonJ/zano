@@ -15,7 +15,7 @@ if [ -n "$build_prefix" ]; then
   build_prefix_label="$build_prefix "
 fi
 
-if [ -n "$testnet" ]; then
+if [ "$testnet" == true ]; then
   testnet_def="-D TESTNET=TRUE"
   testnet_label="testnet "
   ARCHIVE_NAME_PREFIX=${ARCHIVE_NAME_PREFIX}testnet-
@@ -151,7 +151,7 @@ fi
 read checksum <<< $( shasum -a 256 $package_filepath | awk '/^/ { print $1 }' )
 
 mail_msg="New ${build_prefix_label}${testnet_label}build for macOS-x64:<br>
-http://build.zano.org:8081/builds/$package_filename<br>
+https://build.zano.org/builds/$package_filename<br>
 sha256: $checksum"
 
 echo "$mail_msg"

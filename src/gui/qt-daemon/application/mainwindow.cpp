@@ -13,6 +13,7 @@
 #include "gui_utils.h"
 #include "notification_helper.h"
 #include "common/config_encrypt_helper.h"
+#include "currency_core/basic_kv_structs.h"
 
 #define PREPARE_ARG_FROM_JSON(arg_type, var_name)   \
   arg_type var_name = AUTO_VAL_INIT(var_name); \
@@ -93,23 +94,92 @@ std::wstring convert_to_lower_via_qt(const std::wstring& w)
 	return QString().fromStdWString(w).toLower().toStdWString();
 }
 
+MainWindow::MainWindow()
+  : m_gui_deinitialize_done_1(false)
+  , m_backend_stopped_2(false)
+  , m_system_shutdown(false)
+  , m_view(nullptr)
+  , m_channel(nullptr)
+{
+#ifndef _MSC_VER
+  //workaround for macos broken tolower from std, very dirty hack
+  bc_services::set_external_to_low_converter(convert_to_lower_via_qt);
+#endif
+}
 
-MainWindow::MainWindow():
-  //m_quit_requested(false),
-  m_gui_deinitialize_done_1(false),
-  m_backend_stopped_2(false), 
-  m_system_shutdown(false)
+MainWindow::~MainWindow()
+{
+  m_backend.subscribe_to_core_events(nullptr);
+  if (m_view)
+  {
+    m_view->page()->setWebChannel(nullptr);
+    m_view = nullptr;
+  }
+  if (m_channel)
+  {
+    m_channel->deregisterObject(this);
+    delete m_channel;
+    m_channel = nullptr;
+  }
+}
+
+void MainWindow::on_load_finished(bool ok)
+{
+  TRY_ENTRY();
+  LOG_PRINT("MainWindow::on_load_finished(ok = " << (ok ? "true" : "false") << ")", LOG_LEVEL_0);
+  CATCH_ENTRY2(void());
+}
+
+bool MainWindow::init_window()
 {
   m_view = new QWebEngineView(this);
   m_channel = new QWebChannel(m_view->page());
   m_view->page()->setWebChannel(m_channel);
 
+  QWidget* central_widget_to_be_set = m_view;
+
+  std::string qt_dev_tools_option = m_backend.get_qt_dev_tools_option();
+  if (!qt_dev_tools_option.empty())
+  {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
+    std::vector<std::string> qt_dev_tools_option_parts;
+    boost::split(qt_dev_tools_option_parts, qt_dev_tools_option, [](char c) { return c == ','; });
+    
+    Qt::Orientation orientation = Qt::Vertical;
+    if (qt_dev_tools_option_parts.size() >= 1 && qt_dev_tools_option_parts[0] == "horizontal")
+      orientation = Qt::Horizontal;
+
+    double zoom_factor = 1.3;
+    if (qt_dev_tools_option_parts.size() >= 2)
+      epee::string_tools::get_xtype_from_string(zoom_factor, qt_dev_tools_option_parts[1]);
+
+    QSplitter* spliter = new QSplitter(orientation);
+    spliter->addWidget(m_view);
+    QWebEngineView* inspector = new QWebEngineView();
+    spliter->addWidget(inspector);
+    m_view->page()->setDevToolsPage(inspector->page());
+    inspector->setZoomFactor(zoom_factor);
+
+    spliter->setCollapsible(0, false);
+    spliter->setCollapsible(1, false);
+
+    QList<int> Sizes;
+    Sizes.append(0.5 * m_view->sizeHint().height());
+    Sizes.append(0.5 * m_view->sizeHint().height());
+    spliter->setSizes(Sizes);
+
+    central_widget_to_be_set = spliter;
+#else
+    LOG_ERROR("Qt Dev Tool is not available for this Qt version, try building with Qt 5.11.0 or higher");
+#endif
+  }
+
   // register QObjects to be exposed to JavaScript
   m_channel->registerObject(QStringLiteral("mediator_object"), this);
 
-  connect(m_view, SIGNAL(loadFinished(bool)), SLOT(on_load_finished(bool)));  
-  
-  setCentralWidget(m_view);
+  connect(m_view, SIGNAL(loadFinished(bool)), SLOT(on_load_finished(bool)));
+
+  setCentralWidget(central_widget_to_be_set);
   //this->setMouseTracking(true);
 
   m_view->page()->settings()->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, true);
@@ -133,30 +203,9 @@ MainWindow::MainWindow():
   m_localization[localization_id_tray_menu_show] = "localization_id_tray_menu_show";
   m_localization[localization_id_tray_menu_minimize] = "localization_id_tray_menu_minimize";
 
-#ifndef _MSC_VER
-	//workaround for macos broken tolower from std, very dirty hack
-  bc_services::set_external_to_low_converter(convert_to_lower_via_qt);
-#endif
+  return true;
 }
 
-MainWindow::~MainWindow()
-{
-  m_backend.subscribe_to_core_events(nullptr);
-  m_view->page()->setWebChannel(nullptr);
-  m_channel->deregisterObject(this);
-  delete m_channel;
-}
-
-void MainWindow::on_load_finished(bool ok)
-{
-  TRY_ENTRY();
-  LOG_PRINT("MainWindow::on_load_finished(ok = " << (ok ? "true" : "false") << ")", LOG_LEVEL_0);
-  CATCH_ENTRY2(void());
-}
-
-
-
-//-------------
 QString MainWindow::get_default_user_dir(const QString& param)
 {
   TRY_ENTRY();
@@ -172,6 +221,7 @@ bool MainWindow::toggle_mining()
   return true;
   CATCH_ENTRY2(false);
 }
+
 QString MainWindow::get_exchange_last_top(const QString& params)
 {
   TRY_ENTRY();
@@ -188,10 +238,28 @@ QString MainWindow::get_tx_pool_info()
   return MAKE_RESPONSE(ar);
   CATCH_ENTRY_FAIL_API_RESPONCE();
 }
-// bool MainWindow::store_config()
-// {
-//   return true;
-// }
+
+QString MainWindow::request_dummy()
+{
+  static int code_ = 0;
+  TRY_ENTRY();
+  LOG_API_TIMING();
+  PREPARE_RESPONSE(currency::COMMAND_RPC_GET_POOL_INFO::response, ar);
+  if (code_ == 2)
+  {
+    code_ = -1;
+    ar.error_code = API_RETURN_CODE_CORE_BUSY;
+  }
+  else
+  {
+    ar.error_code = API_RETURN_CODE_OK;
+  }
+
+  ++code_;
+  return MAKE_RESPONSE(ar);
+  CATCH_ENTRY_FAIL_API_RESPONCE();
+}
+
 
 QString MainWindow::get_default_fee()
 {
@@ -659,7 +727,13 @@ void qt_log_message_handler(QtMsgType type, const QMessageLogContext &context, c
 bool MainWindow::init_backend(int argc, char* argv[])
 {
   TRY_ENTRY();
-  if (!m_backend.init(argc, argv, this))
+  if (!m_backend.init_command_line(argc, argv))
+    return false;
+
+  if (!init_window())
+    return false;
+
+  if (!m_backend.init(this))
     return false;
 
   if (m_backend.is_qt_logs_enabled())
@@ -682,14 +756,7 @@ QString    MainWindow::is_remnotenode_mode_preconfigured()
 QString MainWindow::start_backend(const QString& params)
 {
   TRY_ENTRY();
-  view::start_backend_params sbp = AUTO_VAL_INIT(sbp);
   view::api_response ar = AUTO_VAL_INIT(ar);
-
-  if (!epee::serialization::load_t_from_json(sbp, params.toStdString()))
-  {
-    ar.error_code = API_RETURN_CODE_BAD_ARG;
-    return MAKE_RESPONSE(ar);
-  }
 
   bool r = m_backend.start();
   if (!r)
@@ -706,13 +773,18 @@ bool MainWindow::update_wallet_status(const view::wallet_status_info& wsi)
 {
   TRY_ENTRY();
   m_wallet_states->operator [](wsi.wallet_id) = wsi.wallet_state;
+  
+  std::string json_str_pub;
+  epee::serialization::store_t_to_json(static_cast<const view::wallet_status_info_base&>(wsi), json_str_pub, 0, epee::serialization::eol_lf);
+  LOG_PRINT_L0(get_wallet_log_prefix(wsi.wallet_id) + "SENDING SIGNAL -> [update_wallet_status]:" << std::endl << json_str_pub);
+  
   std::string json_str;
   epee::serialization::store_t_to_json(wsi, json_str, 0, epee::serialization::eol_lf);
-  LOG_PRINT_L0(get_wallet_log_prefix(wsi.wallet_id) + "SENDING SIGNAL -> [update_wallet_status]:" << std::endl << json_str );
   QMetaObject::invokeMethod(this, "update_wallet_status", Qt::QueuedConnection, Q_ARG(QString, json_str.c_str()));
   return true;
   CATCH_ENTRY2(false);
 }
+
 bool MainWindow::set_options(const view::gui_options& opt)
 {
   TRY_ENTRY();
@@ -774,6 +846,11 @@ bool MainWindow::money_transfer(const view::transfer_event_info& tei)
 //don't show unconfirmed tx
   if (tei.ti.height == 0)
     return true;
+  if (tei.is_wallet_in_sync_process)
+  {
+    //don't show notification if it long sync process(mmight cause system freeze)
+    return true;
+  }
 
   auto amount_str = currency::print_money(tei.ti.amount);
   std::string title, msg;
@@ -863,11 +940,20 @@ QString MainWindow::get_os_version()
   CATCH_ENTRY2(API_RETURN_CODE_INTERNAL_ERROR);
 }
 
+QString MainWindow::get_network_type()
+{
+#if defined(TESTNET)
+  return "testnet";
+#else
+  return "mainnet";
+#endif
+}
+
 QString MainWindow::get_alias_coast(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  PREPARE_ARG_FROM_JSON(view::struct_with_one_t_type<std::string>, lvl);
+  PREPARE_ARG_FROM_JSON(currency::struct_with_one_t_type<std::string>, lvl);
   view::get_alias_coast_response resp;
   resp.error_code = m_backend.get_alias_coast(lvl.v, resp.coast);
   return epee::serialization::store_t_to_json(resp, 0, epee::serialization::eol_lf).c_str();
@@ -889,9 +975,12 @@ QString MainWindow::set_localization_strings(const QString param)
   else
   {
     m_localization = lr.strings;
-    m_quit_action->setText(QString().fromUtf8(m_localization[localization_id_quit].c_str()));
-    m_restore_action->setText(QString().fromUtf8(m_localization[localization_id_tray_menu_show].c_str()));
-    m_minimize_action->setText(QString().fromUtf8(m_localization[localization_id_tray_menu_minimize].c_str()));
+    if(m_quit_action)
+      m_quit_action->setText(QString::fromStdString(m_localization[localization_id_quit]));
+    if(m_restore_action)
+      m_restore_action->setText(QString::fromStdString(m_localization[localization_id_tray_menu_show]));
+    if(m_minimize_action)
+      m_minimize_action->setText(QString::fromStdString(m_localization[localization_id_tray_menu_minimize]));
     resp.error_code = API_RETURN_CODE_OK;
     LOG_PRINT_L0("New localization set, language title: " << lr.language_title << ", strings " << lr.strings.size());
   }
@@ -1333,7 +1422,7 @@ QString MainWindow::get_all_aliases()
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  //PREPARE_ARG_FROM_JSON(view::struct_with_one_t_type<uint64_t>, param);
+  //PREPARE_ARG_FROM_JSON(currency::struct_with_one_t_type<uint64_t>, param);
   PREPARE_RESPONSE(view::alias_set, rsp);
 
   rsp.error_code = m_backend.get_aliases(rsp.response_data);
@@ -1373,7 +1462,7 @@ QString MainWindow::set_log_level(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  PREPARE_ARG_FROM_JSON(view::struct_with_one_t_type<int64_t>, lvl);
+  PREPARE_ARG_FROM_JSON(currency::struct_with_one_t_type<int64_t>, lvl);
   epee::log_space::get_set_log_detalisation_level(true, lvl.v);
   default_ar.error_code = API_RETURN_CODE_OK;
   LOG_PRINT("[LOG LEVEL]: set to " << lvl.v, LOG_LEVEL_MIN);
@@ -1385,7 +1474,7 @@ QString MainWindow::get_log_level(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  PREPARE_RESPONSE(view::struct_with_one_t_type<int>, ar);
+  PREPARE_RESPONSE(currency::struct_with_one_t_type<int>, ar);
   ar.response_data.v = epee::log_space::get_set_log_detalisation_level();
   ar.error_code = API_RETURN_CODE_OK;
   return MAKE_RESPONSE(ar);
@@ -1587,7 +1676,7 @@ QString MainWindow::restore_wallet(const QString& param)
   //return que_call2<view::restore_wallet_request>("restore_wallet", param, [this](const view::restore_wallet_request& owd, view::api_response& ar){
   PREPARE_ARG_FROM_JSON(view::restore_wallet_request, owd);
   PREPARE_RESPONSE(view::open_wallet_response, ar);
-  ar.error_code = m_backend.restore_wallet(epee::string_encoding::utf8_to_wstring(owd.path), owd.pass, owd.restore_key, ar.response_data);
+  ar.error_code = m_backend.restore_wallet(epee::string_encoding::utf8_to_wstring(owd.path), owd.pass, owd.seed_phrase, owd.seed_pass, ar.response_data);
   return MAKE_RESPONSE(ar);
   CATCH_ENTRY_FAIL_API_RESPONCE();
 }
@@ -1599,7 +1688,7 @@ QString MainWindow::open_wallet(const QString& param)
   //return que_call2<view::open_wallet_request>("open_wallet", param, [this](const view::open_wallet_request& owd, view::api_response& ar){
   PREPARE_ARG_FROM_JSON(view::open_wallet_request, owd);
   PREPARE_RESPONSE(view::open_wallet_response, ar);
-  ar.error_code = m_backend.open_wallet(epee::string_encoding::utf8_to_wstring(owd.path), owd.pass, owd.txs_to_return, ar.response_data);
+  ar.error_code = m_backend.open_wallet(epee::string_encoding::utf8_to_wstring(owd.path), owd.pass, owd.txs_to_return, ar.response_data, owd.exclude_mining_txs);
   return MAKE_RESPONSE(ar);
   CATCH_ENTRY_FAIL_API_RESPONCE();
 }
@@ -1743,7 +1832,7 @@ QString MainWindow::get_recent_transfers(const QString& param)
   LOG_API_TIMING();
   PREPARE_ARG_FROM_JSON(view::get_recent_transfers_request, a);
   PREPARE_RESPONSE(view::transfers_array, ar);
-  ar.error_code = m_backend.get_recent_transfers(a.wallet_id, a.offset, a.count, ar.response_data);
+  ar.error_code = m_backend.get_recent_transfers(a.wallet_id, a.offset, a.count, ar.response_data, a.exclude_mining_txs);
   return MAKE_RESPONSE(ar);
   CATCH_ENTRY_FAIL_API_RESPONCE();
 }
@@ -1788,9 +1877,9 @@ QString MainWindow::get_smart_wallet_info(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  PREPARE_ARG_FROM_JSON(view::wallet_id_obj, wo);
+  PREPARE_ARG_FROM_JSON(view::request_get_smart_wallet_info, wo);
   PREPARE_RESPONSE(view::get_restore_info_response, ar);
-  ar.error_code = m_backend.get_wallet_restore_info(wo.wallet_id, ar.response_data.restore_key);
+  ar.error_code = m_backend.get_wallet_restore_info(wo.wallet_id, ar.response_data.seed_phrase, wo.seed_password);
   return MAKE_RESPONSE(ar);
   CATCH_ENTRY_FAIL_API_RESPONCE();
 }
@@ -1851,7 +1940,7 @@ QString MainWindow::toggle_autostart(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  PREPARE_ARG_FROM_JSON(view::struct_with_one_t_type<bool>, as);
+  PREPARE_ARG_FROM_JSON(currency::struct_with_one_t_type<bool>, as);
 
   if (gui_tools::SetStartOnSystemStartup(as.v))
     default_ar.error_code = API_RETURN_CODE_OK;
@@ -1884,14 +1973,27 @@ QString MainWindow::open_url_in_browser(const QString& param)
   CATCH_ENTRY2(API_RETURN_CODE_INTERNAL_ERROR);
 }
 
-
 QString MainWindow::is_valid_restore_wallet_text(const QString& param)
 {
   TRY_ENTRY();
   LOG_API_TIMING();
-  return m_backend.is_valid_brain_restore_data(param.toStdString()).c_str();
+  PREPARE_ARG_FROM_JSON(view::seed_info_param, rwtp);
+  return m_backend.is_valid_brain_restore_data(rwtp.seed_phrase, rwtp.seed_password).c_str();
   CATCH_ENTRY2(API_RETURN_CODE_INTERNAL_ERROR);
 }
+
+QString MainWindow::get_seed_phrase_info(const QString& param)
+{
+  TRY_ENTRY();
+  LOG_API_TIMING();
+  PREPARE_ARG_FROM_JSON(view::seed_info_param, rwtp);
+  PREPARE_RESPONSE(view::seed_phrase_info, ar);
+  ar.error_code = m_backend.get_seed_phrase_info(rwtp.seed_phrase, rwtp.seed_password, ar.response_data).c_str();
+  LOG_PRINT_CYAN("[get_seed_phrase_info]:" << epee::serialization::store_t_to_json(ar), LOG_LEVEL_0);
+  return MAKE_RESPONSE(ar);
+  CATCH_ENTRY_FAIL_API_RESPONCE();
+}
+
 void MainWindow::contextMenuEvent(QContextMenuEvent * event)
 {
   TRY_ENTRY();

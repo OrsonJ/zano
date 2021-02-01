@@ -17,13 +17,44 @@
 
     width: 2rem;
     height: 2rem;
-  
+
     path, circle, polygon {
       fill: #4db1ff;
     }
-  } 
+  }
 }
-
+.wallet-type {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 7px;
+  height: 100%;
+  background-color: transparent;
+  transition: all ease .3s;
+  overflow: hidden;
+  &:hover {
+    width: 28px;
+  }
+  .content {
+    height: 100%;
+    padding: 7px;
+    font-size: 12px;
+    line-height: 14px;
+    font-weight: 500;
+    color: #ffffff;
+    text-decoration: none;
+    text-transform: capitalize;
+    transition: all ease .3s;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    &.auditable {
+      background-color: #5cda9d;
+    }
+    &.watch-only, &.auditable-watch-only {
+      background-color: #8686ff;
+    }
+  }
+}
 .sidebar-accounts {
   position: relative;
   display: flex;
@@ -54,15 +85,16 @@
     flex-direction: column;
     flex: 1 1 auto;
     margin: 0 -3rem;
-    overflow-y: overlay;
+    overflow-y: auto;
 
     .sidebar-account {
+      position: relative;
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
       cursor: pointer;
-      padding: 2rem 3rem;
-      
+      padding: 2.5rem 3rem;
+
       .close-wallet-wrapper {
         display: flex;
         justify-content: flex-end;
@@ -70,23 +102,29 @@
         button {
           display: flex;
           position: absolute;
+          top: -12px;
+          right: -18px;
           padding: 0;
           height: auto;
           background: transparent;
           border: none;
-          margin: -1.3rem 1.6rem;
-    
+
           .icon {
             width: 1.3rem;
             height: 1.3rem;
-
             &.close-wallet {
-              mask: url(../../assets/icons/close-wallet.svg) no-repeat center;
+              background-color: transparent;
+            }
+            &.close-wallet::after {
+              display: block;
+              content:'';
+              background:url("../../assets/icons/close-wallet-blue.svg") no-repeat center;
+              width: 13px;
+              height: 13px;
             }
           }
         }
       }
-      
 
       .sidebar-account-row {
         display: flex;
@@ -136,12 +174,17 @@
 
           .icon {
             margin-left: 0.5rem;
-            width: 1.2rem;
-            height: 1.2rem;
-
-            &.comment {
-              mask: url(../../assets/icons/alert.svg) no-repeat center;
-            }
+            width: 1.3rem;
+            height: 1.3rem;
+            border-radius: 50%;
+            color: #1a1a1a;
+            font-size: 9px;
+            font-weight: 700;
+            line-height: 9px;
+            padding-right: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
         }
 
@@ -205,7 +248,7 @@
           }
         }
 
-        
+
       }
 
       &:focus {
@@ -267,7 +310,7 @@
   }
 }
 
-.sidebar-synchronization-status {
+.synchronization-status {
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -323,7 +366,7 @@
           font-size: 1.3rem;
           line-height: 0.7rem;
           padding-left: 0.7rem;
-        }       
+        }
       }
 
       .loading {
